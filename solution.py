@@ -53,14 +53,16 @@ class Sentiment(object):
 
     # Initialize dicts
     def __init__(self,
-                 wc_dict = {},
-                 sent_dict = {},
-                 sent_dict_wcr = {}):
+                 wc_dict={},
+                 sent_dict={},
+                 sent_dict_wcr={},
+                 regularize=0):
         self.wc_dict = wc_dict # for regularization by word frequency -
                                # requires two runs of fit-like functions
         self.sent_dict = sent_dict
         self.sent_dict_wcr = sent_dict_wcr
-        self.rescale_factor = 1
+        self.rescale_factor = 1 # only affects results if non-regularized
+        self.regularize = regularize
 
     def fit(self, regularize: bool, content: str, sentiment_int: int,
             **kwargs):
@@ -83,7 +85,7 @@ class Sentiment(object):
                 self.sent_dict[word] = sentiment_int
 
         self.rescale_factor = max(self.rescale_factor,
-                                  abs(self.sent_dict[word]))
+                                  abs(sentiment_int))
 
     def wc_fit(self, regularize: bool, content: str, sentiment_int: int,
                **kwargs):
@@ -107,7 +109,7 @@ class Sentiment(object):
                     self.sent_dict_wcr[word] = 0
 
         self.rescale_factor = max(self.rescale_factor,
-                                  abs(self.sent_dict[word]))
+                                  abs(sentiment_int))
 
     def eval_sentiment_with_warnings(self, content: str,
                                      prewarned_list: list = [],
@@ -165,8 +167,9 @@ class Sentiment(object):
         with open('model/wc_dict{name}.txt'.format(name=name), 'w') as f_out:
             json.dump(self.wc_dict, f_out)
 
-        with open('model/sent_dict_wcr{name}.txt'.format(name=name), 'w') as f_out:
-            json.dump(self.sent_dict_wcr, f_out)
+        if self.regularize:
+            with open('model/sent_dict_wcr{name}.txt'.format(name=name), 'w') as f_out:
+                json.dump(self.sent_dict_wcr, f_out)
 
     def load(self, name=''):
         with open('model/sent_dict{name}.txt'.format(name=name), 'r') as f_in:
@@ -175,8 +178,9 @@ class Sentiment(object):
         with open('model/wc_dict{name}.txt'.format(name=name), 'r') as f_in:
             self.wc_dict = json.load(f_in)
 
-        with open('model/sent_dict_wcr{name}.txt'.format(name=name), 'r') as f_in:
-            self.sent_dict_wcr = json.load(f_in)
+        if self.regularize:
+            with open('model/sent_dict_wcr{name}.txt'.format(name=name), 'r') as f_in:
+                self.sent_dict_wcr = json.load(f_in)
 
 
 def main(argv):
@@ -208,7 +212,8 @@ def main(argv):
 
     sentiment_list = [Sentiment(wc_dict=blank_dict.copy(),
                                 sent_dict=blank_dict.copy(),
-                                sent_dict_wcr=blank_dict.copy())] * n_folds
+                                sent_dict_wcr=blank_dict.copy(),
+                                regularize=regularize)] * n_folds
     for fold, (train_index, test_index) in enumerate(kf.split(X)):
         print('Working on test fold {}: '.format(fold+1), end=' ')
         X_train, X_test = X[train_index], X[test_index]
@@ -269,7 +274,8 @@ def main(argv):
 
     twitter_sentiment = Sentiment(wc_dict=blank_dict.copy(),
                                   sent_dict=blank_dict.copy(),
-                                  sent_dict_wcr=blank_dict.copy())
+                                  sent_dict_wcr=blank_dict.copy(),
+                                  regularize=regularize)
 
     if os.path.isfile('model/wc_dict_full.txt'):
         twitter_sentiment.load(name='_full')
