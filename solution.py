@@ -28,6 +28,17 @@ basic_dict = {'positive': +1, 'neutral': 0, 'negative': -1}
 
 n_folds = 5
 
+
+def word_to_dict_key(wordlist: pd.Series):
+    blank_dict = {}
+    for row in wordlist:
+        for word in str_splitter(row):
+            if word not in blank_dict:
+                blank_dict[word] = 0
+
+    return blank_dict
+
+
 class Sentiment(object):
 
     # Initialize dicts
@@ -123,14 +134,18 @@ def main(argv):
     else:
         print("Not regularizing")
 
-    twitter_sentiment = Sentiment()
-
     ## Read in the data
     train_df = pd.read_csv("data/train.csv")
     test_df = pd.read_csv("data/evaluate.csv")
 
     # train_df.describe()
     # test_df.describe()
+
+    # hopefully save some time by pregenerating word list
+    blank_dict = word_to_dict_key(train_df)
+
+    twitter_sentiment = Sentiment(wc_dict=blank_dict, sent_dict=blank_dict,
+                                  sent_dict_wcr=blank_dict)
 
     # Convert possible sentiment output strings to numerical values
     train_df['sentiment_int'] = train_df['sentiment'].map(basic_dict)
@@ -145,7 +160,8 @@ def main(argv):
 
     fold_accuracy = [0] * n_folds
 
-    sentiment_list = [Sentiment()] * n_folds
+    sentiment_list = [Sentiment(wc_dict=blank_dict, sent_dict=blank_dict,
+                                  sent_dict_wcr=blank_dict)] * n_folds
     for fold, (train_index, test_index) in enumerate(kf.split(X)):
         print('Working on fold {}'.format(fold+1))
         X_train, X_test = X[train_index], X[test_index]
