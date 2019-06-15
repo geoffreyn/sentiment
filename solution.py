@@ -43,7 +43,7 @@ def word_to_dict_key(wordlist: pd.Series):
     for row in wordlist:
         for word in str_splitter(row):
             if word not in blank_dict:
-                blank_dict[word] = 0
+                blank_dict[word] = np.int64(0)
 
     print('Done!')
     return blank_dict
@@ -66,6 +66,8 @@ class Sentiment(object):
             **kwargs):
         sentence_split = str_splitter(content)
 
+        if len(sentence_split) == 0:
+            print("bad")
         if regularize:
             sentiment_int /= len(sentence_split)
             wc_factor = 1 / len(sentence_split)
@@ -80,7 +82,8 @@ class Sentiment(object):
                 self.wc_dict[word] = wc_factor
                 self.sent_dict[word] = sentiment_int
 
-        self.rescale_factor = max(self.rescale_factor, abs(self.sent_dict[word]))
+        self.rescale_factor = max(self.rescale_factor,
+                                  abs(self.sent_dict[word]))
 
     def wc_fit(self, regularize: bool, content: str, sentiment_int: int,
                **kwargs):
@@ -103,7 +106,8 @@ class Sentiment(object):
                     # word may have negligible weight??
                     self.sent_dict_wcr[word] = 0
 
-        self.rescale_factor = max(self.rescale_factor, abs(self.sent_dict[word]))
+        self.rescale_factor = max(self.rescale_factor,
+                                  abs(self.sent_dict[word]))
 
     def eval_sentiment_with_warnings(self, content: str,
                                      prewarned_list: list = [],
@@ -202,8 +206,9 @@ def main(argv):
     fold_train_accuracy = [0] * n_folds
     fold_test_accuracy = [0] * n_folds
 
-    sentiment_list = [Sentiment(wc_dict=blank_dict, sent_dict=blank_dict,
-                                  sent_dict_wcr=blank_dict)] * n_folds
+    sentiment_list = [Sentiment(wc_dict=blank_dict.copy(),
+                                sent_dict=blank_dict.copy(),
+                                sent_dict_wcr=blank_dict.copy())] * n_folds
     for fold, (train_index, test_index) in enumerate(kf.split(X)):
         print('Working on test fold {}: '.format(fold+1), end=' ')
         X_train, X_test = X[train_index], X[test_index]
@@ -259,11 +264,12 @@ def main(argv):
               format(n_folds, np.mean(fold_test_accuracy)))
 
     ## Train the full model
-    train_df['sentiment_int'] = test_df['sentiment'].map(basic_dict)
+    train_df['sentiment_int'] = train_df['sentiment'].map(basic_dict)
     test_df['sentiment_int'] = test_df['sentiment'].map(basic_dict)
 
-    twitter_sentiment = Sentiment(wc_dict=blank_dict, sent_dict=blank_dict,
-                                  sent_dict_wcr=blank_dict)
+    twitter_sentiment = Sentiment(wc_dict=blank_dict.copy(),
+                                  sent_dict=blank_dict.copy(),
+                                  sent_dict_wcr=blank_dict.copy())
 
     if os.path.isfile('model/wc_dict_full.txt'):
         twitter_sentiment.load(name='_full')
@@ -293,10 +299,10 @@ def main(argv):
               format(' with regularization' if regularize else '',
                      accuracy(test_df)))
 
-    plt.boxplot([fold_train_accuracy, fold_test_accuracy],
-                labels=['Training', 'Test'])
-    plt.title('Cross-validation Accuracy')
-    plt.show()
+    # plt.boxplot([fold_train_accuracy, fold_test_accuracy],
+    #             labels=['Training', 'Test'])
+    # plt.title('Cross-validation Accuracy')
+    # plt.show()
 
 if __name__ == '__main__':
     sys.exit(main(sys.argv[1:]))
