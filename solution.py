@@ -29,6 +29,7 @@ basic_dict = {'positive': +1, 'neutral': 0, 'negative': -1}
 n_folds = 5
 
 class Sentiment(object):
+
     # Initialize dicts
     def __init__(self,
                  wc_dict = {},
@@ -38,7 +39,6 @@ class Sentiment(object):
                                # requires two runs of fit-like functions
         self.sent_dict = sent_dict
         self.sent_dict_wcr = sent_dict_wcr
-
 
     def fit(self, regularize: bool, content: str, sentiment_int: int,
             **kwargs):
@@ -58,7 +58,6 @@ class Sentiment(object):
                 self.wc_dict[word] = wc_factor
                 self.sent_dict[word] = sentiment_int
 
-
     def wc_fit(self, regularize: bool, content: str, sentiment_int: int,
                **kwargs):
         sentence_split = str_splitter(content)
@@ -72,8 +71,6 @@ class Sentiment(object):
             else:
                 self.sent_dict_wcr[word] = sentiment_int / self.wc_dict[word]
 
-
-    ## Evaluate the model
     def eval_sentiment_with_warnings(self, content: str,
                                      prewarned_list: list = [],
                                      **kwargs):
@@ -90,17 +87,15 @@ class Sentiment(object):
 
         return sentiment_out
 
-
-    def eval_sentiment(self, word_dict, content: str, **kwargs):
+    def eval_sentiment(self, sent_dict, content: str, **kwargs):
         sentiment_out = 0
         for word in str_splitter(content):
             try:
-                sentiment_out += word_dict[word]
+                sentiment_out += sent_dict[word]
             except KeyError:
                 continue
 
         return sentiment_out
-
 
     def evaluate(self, df, sent_dict):
         predicted_sentiment_vect = [0] * len(df) # Preallocating should be
@@ -111,7 +106,7 @@ class Sentiment(object):
 
         for num, row in df.iterrows():
             predicted_sentiment_vect[num] = self.eval_sentiment(sent_dict,
-                                                               **row)
+                                                                **row)
             predicted_sentiment_vect_string[num] = (
                 'positive' if predicted_sentiment_vect[num] > 0 else (
                     'negative' if predicted_sentiment_vect[num] < 0 else 'neutral')
@@ -119,8 +114,6 @@ class Sentiment(object):
 
         df['prediction_int'] = predicted_sentiment_vect
         df['prediction'] = predicted_sentiment_vect_string
-
-        return df
 
 
 def main(argv):
@@ -150,6 +143,8 @@ def main(argv):
     # folds
     kf.get_n_splits(X)
 
+    fold_accuracy = [0] * n_folds
+
     sentiment_list = [Sentiment()] * n_folds
     for fold, (train_index, test_index) in enumerate(kf.split(X)):
         print('Working on fold {}'.format(fold+1))
@@ -163,37 +158,45 @@ def main(argv):
         # Train on training folds
         for num, row in subdf_train.iterrows():
             sentiment_list[fold].fit(regularize=regularize, **row)
+
+        for num, row in subdf_train.iterrows():
             sentiment_list[fold].wc_fit(regularize=regularize, **row)
 
         # Evaluate on train then test folds
-        subdf_train = sentiment_list[fold].evaluate(subdf_train,
-                                                    sentiment_list[fold].sent_dict_wcr)
-        print("Fold {} accuracy {} on test set: {:0.2f}%".
-                  format(fold+1, 'with regularization' if regularize else '',
+        sentiment_list[fold].evaluate(subdf_train,
+                                      sentiment_list[fold].sent_dict_wcr)
+
+        print("Fold {} accuracy{} on training set: {:0.2f}%".
+                  format(fold+1, ' with regularization' if regularize else '',
                          accuracy(subdf_train)))
 
-        subdf_test = sentiment_list[fold].evaluate(subdf_test,
-                                                    sentiment_list[fold].sent_dict_wcr)
-        print("Fold {} accuracy {} on test set: {:0.2f}%".
-                  format(fold+1, 'with regularization' if regularize else '',
-                         accuracy(subdf_test)))
+        sentiment_list[fold].evaluate(subdf_test,
+                                      sentiment_list[fold].sent_dict_wcr)
+        fold_accuracy[fold] = accuracy(subdf_test)
+        print("Fold {} accuracy{} on test set: {:0.2f}%".
+                  format(fold+1, ' with regularization' if regularize else '',
+                         fold_accuracy[fold]))
+
+    print("{} fold cross-validation accuracy: {:0.2f}".format(n_folds,
+                                                              np.mean(
+                                                                      fold_accuracy)))
 
     ## Train the full model
     for num, row in train_df.iterrows():
         twitter_sentiment.fit(regularize=regularize, **row)
+
+    for num, row in train_df.iterrows():
         twitter_sentiment.wc_fit(regularize=regularize, **row)
 
-    ## evaluate
-    train_df = twitter_sentiment.evaluate(train_df,
-                                          twitter_sentiment.sent_dict_wcr)
-    print("Accuracy {} on training set: {:0.2f}%".
-              format('with regularization' if regularize else '',
+    ## Evaluate
+    twitter_sentiment.evaluate(train_df, twitter_sentiment.sent_dict_wcr)
+    print("Accuracy{} on training set: {:0.2f}%".
+              format(' with regularization' if regularize else '',
                      accuracy(train_df)))
 
-    test_df = twitter_sentiment.evaluate(test_df,
-                                          twitter_sentiment.sent_dict_wcr) #
-    print("Accuracy {} on test set: {:0.2f}%".
-              format('with regularization' if regularize else '',
+    twitter_sentiment.evaluate(test_df, twitter_sentiment.sent_dict_wcr)
+    print("Accuracy{} on test set: {:0.2f}%".
+              format(' with regularization' if regularize else '',
                      accuracy(test_df)))
 
 
