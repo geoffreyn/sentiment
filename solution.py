@@ -238,12 +238,13 @@ def main(argv):
                                          content=row.content,
                                          sentiment_int=row.sentiment_int)
 
-            print('Regularizing...', end=' ')
-            iterator = subdf_train.copy().itertuples()
-            for row in iterator:
-                sentiment_list[fold].wc_fit(regularize=regularize,
-                                            content=row.content,
-                                            sentiment_int=row.sentiment_int)
+            if regularize:
+                print('Regularizing...', end=' ')
+                iterator = subdf_train.copy().itertuples()
+                for row in iterator:
+                    sentiment_list[fold].wc_fit(regularize=regularize,
+                                                content=row.content,
+                                                sentiment_int=row.sentiment_int)
 
             sentiment_list[fold].save(name='_fold{n}'.format(n=fold))
 
@@ -286,11 +287,12 @@ def main(argv):
                                   content=row.content,
                                   sentiment_int=row.sentiment_int)
 
-        iterator = train_df.copy().itertuples()
-        for row in iterator:
-            twitter_sentiment.wc_fit(regularize=regularize,
-                                     content=row.content,
-                                     sentiment_int=row.sentiment_int)
+        if regularize:
+            iterator = train_df.copy().itertuples()
+            for row in iterator:
+                twitter_sentiment.wc_fit(regularize=regularize,
+                                         content=row.content,
+                                         sentiment_int=row.sentiment_int)
 
         twitter_sentiment.save(name='_full')
 
