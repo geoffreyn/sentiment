@@ -9,89 +9,103 @@ import nltk
 
 nltk.download('punkt')
 
-str_splitter = lambda str_: nltk.tokenize.word_tokenize(str_)
+# TODO investigate case-sensitive: sparser but capitlization can be indicative of emotional weight
+str_splitter = lambda str_: [s.lower() for s in nltk.tokenize.word_tokenize(str_)]
 accuracy = lambda df : (np.sum(df['prediction'] == df['sentiment']) /
                         len(df) * 100)
 
 basic_dict = {'positive': +1, 'neutral': 0, 'negative': -1}
 
+class Sentiment(object):
+    # Initialize dicts
+    def __init__(self,
+                 wc_dict = {},
+                 sent_dict = {},
+                 sent_dict_wcr = {}):
+        self.wc_dict = wc_dict # for regularization by word frequency -
+                               # requires two runs of fit-like functions
+        self.sent_dict = sent_dict
+        self.sent_dict_wcr = sent_dict_wcr
 
-def sentimize(sent_dict, wc_dict, regularize: bool, content: str,
-              sentiment_int: int, **kwargs):
-    sentence_split = str_splitter(content)
 
-    if regularize:
-        sentiment_int /= len(content)
-        wc_factor = 1 / len(content)
-    else:
-        wc_factor = 1
+    def fit(self, regularize: bool, content: str, sentiment_int: int,
+            **kwargs):
+        sentence_split = str_splitter(content)
 
-    for word in sentence_split:
-        if word in sent_dict:
-            wc_dict[word] += wc_factor
-            sent_dict[word] += sentiment_int
+        if regularize:
+            sentiment_int /= len(content)
+            wc_factor = 1 / len(content)
         else:
-            wc_dict[word] = wc_factor
-            sent_dict[word] = sentiment_int
+            wc_factor = 1
+
+        for word in sentence_split:
+            if word in self.sent_dict:
+                self.wc_dict[word] += wc_factor
+                self.sent_dict[word] += sentiment_int
+            else:
+                self.wc_dict[word] = wc_factor
+                self.sent_dict[word] = sentiment_int
 
 
-def wc_sentimize(sent_dict_wcr, wc_dict, regularize: bool, content: str,
-                 sentiment_int: int, **kwargs):
-    sentence_split = str_splitter(content)
+    def wc_fit(self, regularize: bool, content: str, sentiment_int: int,
+               **kwargs):
+        sentence_split = str_splitter(content)
 
-    if regularize:
-        sentiment_int /= len(content)
+        if regularize:
+            sentiment_int /= len(content)
 
-    for word in sentence_split:
-        if word in sent_dict_wcr:
-            sent_dict_wcr[word] += sentiment_int / wc_dict[word]
-        else:
-            sent_dict_wcr[word] = sentiment_int / wc_dict[word]
+        for word in sentence_split:
+            if word in self.sent_dict_wcr:
+                self.sent_dict_wcr[word] += sentiment_int / self.wc_dict[word]
+            else:
+                self.sent_dict_wcr[word] = sentiment_int / self.wc_dict[word]
 
 
-## Evaluate the model
-def eval_sentiment_with_warnings(content: str, prewarned_list: list = [],
-                                 **kwargs):
-    sentiment_out = 0
-    for word in str_splitter(content):
-        if word not in prewarned_list:
+    ## Evaluate the model
+    def eval_sentiment_with_warnings(self, content: str,
+                                     prewarned_list: list = [],
+                                     **kwargs):
+        sentiment_out = 0
+        for word in str_splitter(content):
+            if word not in prewarned_list:
+                try:
+                    sentiment_out += self.sent_dict[word]
+                except KeyError:
+                    warnings.warn(Warning("%s not found in sent_dict, assigning "
+                                          "`neutral` sentiment".format(word)))
+                    prewarned_list += [word]
+                    continue
+
+        return sentiment_out
+
+
+    def eval_sentiment(self, word_dict, content: str, **kwargs):
+        sentiment_out = 0
+        for word in str_splitter(content):
             try:
-                sentiment_out += sent_dict[word]
+                sentiment_out += word_dict[word]
             except KeyError:
-                warnings.warn(Warning("%s not found in sent_dict, assigning "
-                                      "`neutral` sentiment".format(word)))
-                prewarned_list += [word]
                 continue
 
-    return sentiment_out
+        return sentiment_out
 
 
-def eval_sentiment(word_dict, content: str, **kwargs):
-    sentiment_out = 0
-    for word in str_splitter(content):
-        try:
-            sentiment_out += word_dict[word]
-        except KeyError:
-            continue
+    def evaluate(self, df, sent_dict):
+        predicted_sentiment_vect = [0] * len(df) # Should be more efficient
+                                                 # than adding each element
+                                                 # one at a time
+        predicted_sentiment_vect_string = [0] * len(df)
 
-    return sentiment_out
+        for num, row in df.iterrows():
+            predicted_sentiment_vect[num] = self.eval_sentiment(sent_dict,
+                                                               **row)
+            predicted_sentiment_vect_string[num] = (
+                'positive' if predicted_sentiment_vect[num] > 0 else (
+                    'negative' if predicted_sentiment_vect[num] < 0 else 'neutral')
+            )
 
-
-def evaluate(df, sent_dict):
-    predicted_sentiment_vect = [0] * len(df) # Should be more efficient
-                                             # than adding each element
-                                             # one at a time
-    predicted_sentiment_vect_string = [0] * len(df)
-
-    for num, row in df.iterrows():
-        predicted_sentiment_vect[num] = eval_sentiment(sent_dict, **row)
-        predicted_sentiment_vect_string[num] = (
-            'positive' if predicted_sentiment_vect[num] > 0 else (
-                'negative' if predicted_sentiment_vect[num] < 0 else 'neutral')
-        )
-
-    df['prediction_int'] = predicted_sentiment_vect
-    df['prediction'] = predicted_sentiment_vect_string
+        df['prediction_int'] = predicted_sentiment_vect
+        df['prediction'] = predicted_sentiment_vect_string
 
 
 def main(argv):
@@ -101,11 +115,7 @@ def main(argv):
     else:
         print("Not regularizing")
 
-    # Initialize dicts
-    wc_dict = {} # for regularization by word frequency - requires two runs
-                 # of sentimize-like functions
-    sent_dict = {}
-    sent_dict_wcr = {}
+    twitter_sentiment = Sentiment()
 
     ## Read in the data
     train_df = pd.read_csv("data/train.csv")
@@ -122,17 +132,17 @@ def main(argv):
 
     ## Train the model
     for num, row in train_df.iterrows():
-        sentimize(sent_dict, wc_dict, regularize=regularize, **row)
-        wc_sentimize(sent_dict_wcr, wc_dict, regularize=regularize, **row)
+        twitter_sentiment.fit(regularize=regularize, **row)
+        twitter_sentiment.wc_fit(regularize=regularize, **row)
 
     ## evaluate
-    evaluate(train_df, sent_dict_wcr) # pass by reference
-    print("Accuracy on {} training set: {:0.2f}%".
-              format('regularized' if regularize else '', accuracy(train_df)))
+    twitter_sentiment.evaluate(train_df, twitter_sentiment.sent_dict_wcr)
+    print("Accuracy with {} on training set: {:0.2f}%".
+              format('regularization' if regularize else '', accuracy(train_df)))
 
-    evaluate(test_df, sent_dict_wcr) # pass by reference
-    print("Accuracy on {} test set: {:0.2f}%".
-              format('regularized' if regularize else '', accuracy(test_df)))
+    twitter_sentiment.evaluate(test_df, twitter_sentiment.sent_dict_wcr) #
+    print("Accuracy with {} on test set: {:0.2f}%".
+              format('regularization' if regularize else '', accuracy(test_df)))
 
 
 if __name__ == '__main__':
