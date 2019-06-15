@@ -179,7 +179,7 @@ class Sentiment(object):
 
 
 def main(argv):
-    regularize = argv[0]
+    regularize = (argv[0] == '1')
     if regularize:
         print("Using regularization")
     else:
@@ -301,7 +301,7 @@ def main(argv):
 
     plt.boxplot([fold_train_accuracy, fold_test_accuracy],
                 labels=['Training', 'Test']);
-    plt.title('Cross-validation accuracy')
+    plt.title('Cross-validation Accuracy')
     plt.show()
 
 if __name__ == '__main__':
