@@ -78,9 +78,17 @@ class Sentiment(object):
 
         for word in sentence_split:
             if word in self.sent_dict_wcr:
-                self.sent_dict_wcr[word] += sentiment_int / self.wc_dict[word]
+                try:
+                    self.sent_dict_wcr[word] += sentiment_int / self.wc_dict[word]
+                except ZeroDivisionError:
+                    # word may have negligible weight??
+                    pass
             else:
-                self.sent_dict_wcr[word] = sentiment_int / self.wc_dict[word]
+                try:
+                    self.sent_dict_wcr[word] = sentiment_int / self.wc_dict[word]
+                except ZeroDivisionError:
+                    # word may have negligible weight??
+                    self.sent_dict_wcr[word] = 0
 
     def eval_sentiment_with_warnings(self, content: str,
                                      prewarned_list: list = [],
@@ -98,7 +106,7 @@ class Sentiment(object):
 
         return sentiment_out
 
-    def eval_sentiment(self, sent_dict, content: str, **kwargs):
+    def eval_sentiment(self, sent_dict: dict, content: str, **kwargs):
         sentiment_out = 0
         for word in str_splitter(content):
             try:
@@ -108,16 +116,23 @@ class Sentiment(object):
 
         return sentiment_out
 
-    def evaluate(self, df, sent_dict):
-        predicted_sentiment_vect = [0] * len(df) # Preallocating should be
+    def evaluate(self, df: pd.DataFrame, sent_dict: dict):
+        df_len = len(df)
+
+        predicted_sentiment_vect = [0] * df_len # Preallocating should be
                                                  # more efficient
                                                  # than adding each element
                                                  # one at a time
-        predicted_sentiment_vect_string = [0] * len(df)
+        predicted_sentiment_vect_string = [0] * df_len
 
-        for num, row in df.iterrows():
+        for row in df.itertuples():
+            num = row.Index
+            if num == df_len:
+                break
+
             predicted_sentiment_vect[num] = self.eval_sentiment(sent_dict,
-                                                                **row)
+                                                                row.content)
+
             predicted_sentiment_vect_string[num] = (
                 'positive' if predicted_sentiment_vect[num] > 0 else (
                     'negative' if predicted_sentiment_vect[num] < 0 else 'neutral')
@@ -171,12 +186,18 @@ def main(argv):
         subdf_train = pd.concat([X_train, y_train], axis=1)
         subdf_test = pd.concat([X_test, y_test], axis=1)
 
+        iterator = subdf_train.copy().itertuples()
         # Train on training folds
-        for num, row in subdf_train.iterrows():
-            sentiment_list[fold].fit(regularize=regularize, **row)
+        for row in iterator:
+            sentiment_list[fold].fit(regularize=regularize,
+                                     content=row.content,
+                                     sentiment_int=row.sentiment_int)
 
-        for num, row in subdf_train.iterrows():
-            sentiment_list[fold].wc_fit(regularize=regularize, **row)
+        iterator = subdf_train.copy().itertuples()
+        for row in iterator:
+            sentiment_list[fold].wc_fit(regularize=regularize,
+                                        content=row.content,
+                                        sentiment_int=row.sentiment_int)
 
         # Evaluate on train then test folds
         sentiment_list[fold].evaluate(subdf_train,
@@ -194,15 +215,20 @@ def main(argv):
                          fold_accuracy[fold]))
 
     print("{} fold cross-validation accuracy: {:0.2f}".format(n_folds,
-                                                              np.mean(
-                                                                      fold_accuracy)))
+                                                              np.mean(fold_accuracy)))
 
+    iterator = train_df.copy().itertuples()
     ## Train the full model
-    for num, row in train_df.iterrows():
-        twitter_sentiment.fit(regularize=regularize, **row)
+    for row in iterator:
+        twitter_sentiment.fit(regularize=regularize,
+                              content=row.content,
+                              sentiment_int=row.sentiment_int)
 
-    for num, row in train_df.iterrows():
-        twitter_sentiment.wc_fit(regularize=regularize, **row)
+    iterator = train_df.copy().itertuples()
+    for row in iterator:
+        twitter_sentiment.wc_fit(regularize=regularize,
+                                 content=row.content,
+                                 sentiment_int=row.sentiment_int)
 
     ## Evaluate
     twitter_sentiment.evaluate(train_df, twitter_sentiment.sent_dict_wcr)
