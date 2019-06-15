@@ -62,7 +62,6 @@ class Sentiment(object):
         self.sent_dict = sent_dict
         self.sent_dict_wcr = sent_dict_wcr
         self.rescale_factor = 1 # only affects results if non-regularized
-        self.regularize = regularize
 
     def fit(self, regularize: bool, content: str, sentiment_int: int,
             **kwargs):
@@ -84,8 +83,9 @@ class Sentiment(object):
                 self.wc_dict[word] = wc_factor
                 self.sent_dict[word] = sentiment_int
 
-        self.rescale_factor = max(self.rescale_factor,
-                                  abs(sentiment_int))
+        if not regularize:
+            self.rescale_factor = max(self.rescale_factor,
+                                      abs(sentiment_int))
 
     def wc_fit(self, regularize: bool, content: str, sentiment_int: int,
                **kwargs):
@@ -167,9 +167,8 @@ class Sentiment(object):
         with open('model/wc_dict{name}.txt'.format(name=name), 'w') as f_out:
             json.dump(self.wc_dict, f_out)
 
-        if self.regularize:
-            with open('model/sent_dict_wcr{name}.txt'.format(name=name), 'w') as f_out:
-                json.dump(self.sent_dict_wcr, f_out)
+        with open('model/sent_dict_wcr{name}.txt'.format(name=name), 'w') as f_out:
+            json.dump(self.sent_dict_wcr, f_out)
 
     def load(self, name=''):
         with open('model/sent_dict{name}.txt'.format(name=name), 'r') as f_in:
@@ -178,9 +177,8 @@ class Sentiment(object):
         with open('model/wc_dict{name}.txt'.format(name=name), 'r') as f_in:
             self.wc_dict = json.load(f_in)
 
-        if self.regularize:
-            with open('model/sent_dict_wcr{name}.txt'.format(name=name), 'r') as f_in:
-                self.sent_dict_wcr = json.load(f_in)
+        with open('model/sent_dict_wcr{name}.txt'.format(name=name), 'r') as f_in:
+            self.sent_dict_wcr = json.load(f_in)
 
 
 def main(argv):
@@ -212,8 +210,7 @@ def main(argv):
 
     sentiment_list = [Sentiment(wc_dict=blank_dict.copy(),
                                 sent_dict=blank_dict.copy(),
-                                sent_dict_wcr=blank_dict.copy(),
-                                regularize=regularize)] * n_folds
+                                sent_dict_wcr=blank_dict.copy())] * n_folds
     for fold, (train_index, test_index) in enumerate(kf.split(X)):
         print('Working on test fold {}: '.format(fold+1), end=' ')
         X_train, X_test = X[train_index], X[test_index]
@@ -238,13 +235,12 @@ def main(argv):
                                          content=row.content,
                                          sentiment_int=row.sentiment_int)
 
-            if regularize:
-                print('Regularizing...', end=' ')
-                iterator = subdf_train.copy().itertuples()
-                for row in iterator:
-                    sentiment_list[fold].wc_fit(regularize=regularize,
-                                                content=row.content,
-                                                sentiment_int=row.sentiment_int)
+            print('Regularizing...', end=' ')
+            iterator = subdf_train.copy().itertuples()
+            for row in iterator:
+                sentiment_list[fold].wc_fit(regularize=regularize,
+                                            content=row.content,
+                                            sentiment_int=row.sentiment_int)
 
             sentiment_list[fold].save(name='_fold{n}'.format(n=fold))
 
@@ -275,8 +271,7 @@ def main(argv):
 
     twitter_sentiment = Sentiment(wc_dict=blank_dict.copy(),
                                   sent_dict=blank_dict.copy(),
-                                  sent_dict_wcr=blank_dict.copy(),
-                                  regularize=regularize)
+                                  sent_dict_wcr=blank_dict.copy())
 
     if os.path.isfile('model/wc_dict_full.txt'):
         twitter_sentiment.load(name='_full')
@@ -287,12 +282,11 @@ def main(argv):
                                   content=row.content,
                                   sentiment_int=row.sentiment_int)
 
-        if regularize:
-            iterator = train_df.copy().itertuples()
-            for row in iterator:
-                twitter_sentiment.wc_fit(regularize=regularize,
-                                         content=row.content,
-                                         sentiment_int=row.sentiment_int)
+        iterator = train_df.copy().itertuples()
+        for row in iterator:
+            twitter_sentiment.wc_fit(regularize=regularize,
+                                     content=row.content,
+                                     sentiment_int=row.sentiment_int)
 
         twitter_sentiment.save(name='_full')
 

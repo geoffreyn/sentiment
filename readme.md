@@ -4,11 +4,20 @@
 
 Regularization on:
 
-1.  python3 solution.py 1
+1.  `python3 solution.py 1`
 
 Regularization off:
 
-1.  python3 solution.py 0
+1.  `python3 solution.py 0`
+
+# Note
+
+There are two types of regularization going on in the code:
+
+1. hardcoded to divide each word emotion by the times that word occured
+1. toggleable at command line by argument (`1` or `0` for on or off) to regularize sentences by their length
+
+### If regularization is toggled, the `model/` folder must be manually deleted!
 
 <hr>
 
