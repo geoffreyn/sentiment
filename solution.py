@@ -144,8 +144,9 @@ class Sentiment(object):
                                                                     row.content)
 
                 predicted_sentiment_vect_string[num] = (
-                    'positive' if predicted_sentiment_vect[num] > 0 else (
-                        'negative' if predicted_sentiment_vect[num] < 0 else 'neutral')
+                    'positive' if predicted_sentiment_vect[num] >= 0.5 else (
+                        'negative' if predicted_sentiment_vect[num] <= -0.5
+                             else 'neutral')
                 )
             except IndexError:
                 # Empty content?
@@ -284,6 +285,8 @@ def main(argv):
             twitter_sentiment.wc_fit(regularize=regularize,
                                      content=row.content,
                                      sentiment_int=row.sentiment_int)
+
+        twitter_sentiment.save(name='_full')
 
     ## Evaluate
     twitter_sentiment.evaluate(train_df, twitter_sentiment.sent_dict_wcr)
