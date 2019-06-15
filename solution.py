@@ -43,7 +43,7 @@ def word_to_dict_key(wordlist: pd.Series):
     for row in wordlist:
         for word in str_splitter(row):
             if word not in blank_dict:
-                blank_dict[word] = np.int64(0)
+                blank_dict[word] = 0
 
     print('Done!')
     return blank_dict
