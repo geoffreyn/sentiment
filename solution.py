@@ -7,6 +7,8 @@ Terminal Arguments:
     regularize (bool): Use sentence-length regularization
 """
 
+import os
+import json
 import sys
 import warnings
 
@@ -22,6 +24,9 @@ nltk.download('punkt')
 # TODO try weighing word sentiment by length (longer words should carry more emotion)
 # TODO replace words with synonyms to reduce dimensionality
 # TODO correct typos and expand abbreviations
+# TODO remove timestamps and URLs and other fluff
+# TODO consider time of day's impact on emotion - create categorical time-of-day feature(e.g., morning)
+# TODO consider other features and feed these features into a classification model, such as logistic regression
 # TODO investigate case-sensitivity: sparser but capitlization can be indicative of emotional weight
 str_splitter = lambda str_: [s.lower() for s in nltk.tokenize.word_tokenize(str_)]
 accuracy = lambda df : (np.sum(df['prediction'] == df['sentiment']) /
@@ -33,7 +38,7 @@ n_folds = 5
 
 
 def word_to_dict_key(wordlist: pd.Series):
-    print('discovering words...', end=' ')
+    print('Discovering words...', end=' ')
     blank_dict = {}
     for row in wordlist:
         for word in str_splitter(row):
@@ -149,6 +154,28 @@ class Sentiment(object):
         df['prediction_int'] = predicted_sentiment_vect
         df['prediction'] = predicted_sentiment_vect_string
 
+    def save(self, name=''):
+        os.makedirs('model', exist_ok=True)
+
+        with open('model/sent_dict{name}.txt'.format(name=name), 'w') as f_out:
+            json.dump(self.sent_dict, f_out)
+
+        with open('model/wc_dict{name}.txt'.format(name=name), 'w') as f_out:
+            json.dump(self.wc_dict, f_out)
+
+        with open('model/sent_dict_wcr{name}.txt'.format(name=name), 'w') as f_out:
+            json.dump(self.sent_dict_wcr, f_out)
+
+    def load(self, name=''):
+        with open('model/sent_dict{name}.txt'.format(name=name), 'r') as f_in:
+            self.sent_dict = json.load(f_in)
+
+        with open('model/wc_dict{name}.txt'.format(name=name), 'r') as f_in:
+            self.wc_dict = json.load(f_in)
+
+        with open('model/sent_dict_wcr{name}.txt'.format(name=name), 'r') as f_in:
+            self.sent_dict_wcr = json.load(f_in)
+
 
 def main(argv):
     regularize = argv[0]
@@ -169,6 +196,13 @@ def main(argv):
 
     twitter_sentiment = Sentiment(wc_dict=blank_dict, sent_dict=blank_dict,
                                   sent_dict_wcr=blank_dict)
+
+    if os._exists('model/wc_dict_full.txt'):
+        twitter_sentiment.load(name='_full')
+        loaded_dicts = True
+    else:
+        loaded_dicts = False
+
     # Fit into sklearn syntax
     X, y = train_df['content'], train_df['sentiment']
 
@@ -194,20 +228,25 @@ def main(argv):
         subdf_train['sentiment_int'] = subdf_train['sentiment'].map(basic_dict)
         subdf_test['sentiment_int'] = subdf_test['sentiment'].map(basic_dict)
 
-        iterator = subdf_train.copy().itertuples()
-        # Train on training folds
-        print('Fitting...', end=' ')
-        for row in iterator:
-            sentiment_list[fold].fit(regularize=regularize,
-                                     content=row.content,
-                                     sentiment_int=row.sentiment_int)
+        if os._exists('model/wc_dict_fold{n}.txt'.format(n=fold)):
+            sentiment_list[fold].load(name='_fold{n}'.format(n=fold))
+        else:
+            iterator = subdf_train.copy().itertuples()
+            # Train on training folds
+            print('Fitting...', end=' ')
+            for row in iterator:
+                sentiment_list[fold].fit(regularize=regularize,
+                                         content=row.content,
+                                         sentiment_int=row.sentiment_int)
 
-        print('Regularizing...', end=' ')
-        iterator = subdf_train.copy().itertuples()
-        for row in iterator:
-            sentiment_list[fold].wc_fit(regularize=regularize,
-                                        content=row.content,
-                                        sentiment_int=row.sentiment_int)
+            print('Regularizing...', end=' ')
+            iterator = subdf_train.copy().itertuples()
+            for row in iterator:
+                sentiment_list[fold].wc_fit(regularize=regularize,
+                                            content=row.content,
+                                            sentiment_int=row.sentiment_int)
+
+            sentiment_list[fold].save(name='_fold{n}'.format(n=fold))
 
         print('Done!')
         # Evaluate on train then test folds
@@ -232,18 +271,19 @@ def main(argv):
     train_df['sentiment_int'] = test_df['sentiment'].map(basic_dict)
     test_df['sentiment_int'] = test_df['sentiment'].map(basic_dict)
 
-    iterator = train_df.copy().itertuples()
-    ## Train the full model
-    for row in iterator:
-        twitter_sentiment.fit(regularize=regularize,
-                              content=row.content,
-                              sentiment_int=row.sentiment_int)
+    if not loaded_dicts:
+        iterator = train_df.copy().itertuples()
+        ## Train the full model
+        for row in iterator:
+            twitter_sentiment.fit(regularize=regularize,
+                                  content=row.content,
+                                  sentiment_int=row.sentiment_int)
 
-    iterator = train_df.copy().itertuples()
-    for row in iterator:
-        twitter_sentiment.wc_fit(regularize=regularize,
-                                 content=row.content,
-                                 sentiment_int=row.sentiment_int)
+        iterator = train_df.copy().itertuples()
+        for row in iterator:
+            twitter_sentiment.wc_fit(regularize=regularize,
+                                     content=row.content,
+                                     sentiment_int=row.sentiment_int)
 
     ## Evaluate
     twitter_sentiment.evaluate(train_df, twitter_sentiment.sent_dict_wcr)
