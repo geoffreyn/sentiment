@@ -134,23 +134,15 @@ class Sentiment(object):
                                                 # growing psv and psvs
         predicted_sentiment_vect_string = [0] * df_len
 
-        for row in df.itertuples():
-            num = row.Index
-            if num == df_len:
-                break
+        for num, row in enumerate(df.itertuples()):
+            predicted_sentiment_vect[num] = self.eval_sentiment(sent_dict,
+                                                                row.content)
 
-            try:
-                predicted_sentiment_vect[num] = self.eval_sentiment(sent_dict,
-                                                                    row.content)
-
-                predicted_sentiment_vect_string[num] = (
-                    'positive' if predicted_sentiment_vect[num] >= 0.5 else (
-                        'negative' if predicted_sentiment_vect[num] <= -0.5
-                             else 'neutral')
-                )
-            except IndexError:
-                # Empty content?
-                continue
+            predicted_sentiment_vect_string[num] = (
+                'positive' if predicted_sentiment_vect[num] >= 0.5 else (
+                    'negative' if predicted_sentiment_vect[num] <= -0.5
+                         else 'neutral')
+            )
 
         df['prediction_int'] = predicted_sentiment_vect
         df['prediction'] = predicted_sentiment_vect_string
@@ -198,7 +190,7 @@ def main(argv):
     twitter_sentiment = Sentiment(wc_dict=blank_dict, sent_dict=blank_dict,
                                   sent_dict_wcr=blank_dict)
 
-    if os._exists('model/wc_dict_full.txt'):
+    if os.path.isfile('model/wc_dict_full.txt'):
         twitter_sentiment.load(name='_full')
         loaded_dicts = True
     else:
@@ -217,7 +209,7 @@ def main(argv):
     sentiment_list = [Sentiment(wc_dict=blank_dict, sent_dict=blank_dict,
                                   sent_dict_wcr=blank_dict)] * n_folds
     for fold, (train_index, test_index) in enumerate(kf.split(X)):
-        print('Working on fold {}: '.format(fold+1), end=' ')
+        print('Working on test fold {}: '.format(fold+1), end=' ')
         X_train, X_test = X[train_index], X[test_index]
         y_train, y_test = y[train_index], y[test_index]
 
@@ -229,7 +221,7 @@ def main(argv):
         subdf_train['sentiment_int'] = subdf_train['sentiment'].map(basic_dict)
         subdf_test['sentiment_int'] = subdf_test['sentiment'].map(basic_dict)
 
-        if os._exists('model/wc_dict_fold{n}.txt'.format(n=fold)):
+        if os.path.isfile('model/wc_dict_fold{n}.txt'.format(n=fold)):
             sentiment_list[fold].load(name='_fold{n}'.format(n=fold))
         else:
             iterator = subdf_train.copy().itertuples()
@@ -249,11 +241,11 @@ def main(argv):
 
             sentiment_list[fold].save(name='_fold{n}'.format(n=fold))
 
-        print('Done!')
         # Evaluate on train then test folds
         sentiment_list[fold].evaluate(subdf_train,
                                       sentiment_list[fold].sent_dict_wcr)
 
+        print("Evaluating...")
         fold_train_accuracy[fold] = accuracy(subdf_train)
         print("Fold {} accuracy{} on training set: {:0.2f}%".
                   format(fold+1, ' with regularization' if regularize else '',
@@ -265,6 +257,7 @@ def main(argv):
         print("Fold {} accuracy{} on test set: {:0.2f}%".
                   format(fold+1, ' with regularization' if regularize else '',
                          fold_test_accuracy[fold]))
+        print('Done!')
 
     print("{} fold cross-validation average accuracy: {:0.2f}%".
               format(n_folds, np.mean(fold_test_accuracy)))
