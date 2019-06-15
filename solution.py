@@ -187,15 +187,6 @@ def main(argv):
     # hopefully save some time by pregenerating word list
     blank_dict = word_to_dict_key(train_df)
 
-    twitter_sentiment = Sentiment(wc_dict=blank_dict, sent_dict=blank_dict,
-                                  sent_dict_wcr=blank_dict)
-
-    if os.path.isfile('model/wc_dict_full.txt'):
-        twitter_sentiment.load(name='_full')
-        loaded_dicts = True
-    else:
-        loaded_dicts = False
-
     # Fit into sklearn syntax
     X, y = train_df['content'], train_df['sentiment']
 
@@ -262,12 +253,17 @@ def main(argv):
     print("{} fold cross-validation average accuracy: {:0.2f}%".
               format(n_folds, np.mean(fold_test_accuracy)))
 
+    ## Train the full model
     train_df['sentiment_int'] = test_df['sentiment'].map(basic_dict)
     test_df['sentiment_int'] = test_df['sentiment'].map(basic_dict)
 
-    if not loaded_dicts:
+    twitter_sentiment = Sentiment(wc_dict=blank_dict, sent_dict=blank_dict,
+                                  sent_dict_wcr=blank_dict)
+
+    if os.path.isfile('model/wc_dict_full.txt'):
+        twitter_sentiment.load(name='_full')
+    else:
         iterator = train_df.copy().itertuples()
-        ## Train the full model
         for row in iterator:
             twitter_sentiment.fit(regularize=regularize,
                                   content=row.content,
@@ -293,7 +289,7 @@ def main(argv):
                      accuracy(test_df)))
 
     plt.boxplot([fold_train_accuracy, fold_test_accuracy],
-                labels=['Training', 'Test']);
+                labels=['Training', 'Test'])
     plt.title('Cross-validation Accuracy')
     plt.show()
 
