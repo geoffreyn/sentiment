@@ -66,8 +66,8 @@ class Sentiment(object):
         sentence_split = str_splitter(content)
 
         if regularize:
-            sentiment_int /= len(content)
-            wc_factor = 1 / len(content)
+            sentiment_int /= len(sentence_split)
+            wc_factor = 1 / len(sentence_split)
         else:
             wc_factor = 1
 
@@ -84,7 +84,7 @@ class Sentiment(object):
         sentence_split = str_splitter(content)
 
         if regularize:
-            sentiment_int /= len(content)
+            sentiment_int /= len(sentence_split)
 
         for word in sentence_split:
             if word in self.sent_dict_wcr:
