@@ -60,6 +60,7 @@ class Sentiment(object):
                                # requires two runs of fit-like functions
         self.sent_dict = sent_dict
         self.sent_dict_wcr = sent_dict_wcr
+        self.rescale_factor = 1
 
     def fit(self, regularize: bool, content: str, sentiment_int: int,
             **kwargs):
@@ -78,6 +79,8 @@ class Sentiment(object):
             else:
                 self.wc_dict[word] = wc_factor
                 self.sent_dict[word] = sentiment_int
+
+        self.rescale_factor = max(self.rescale_factor, abs(self.sent_dict[word]))
 
     def wc_fit(self, regularize: bool, content: str, sentiment_int: int,
                **kwargs):
@@ -100,6 +103,8 @@ class Sentiment(object):
                     # word may have negligible weight??
                     self.sent_dict_wcr[word] = 0
 
+        self.rescale_factor = max(self.rescale_factor, abs(self.sent_dict[word]))
+
     def eval_sentiment_with_warnings(self, content: str,
                                      prewarned_list: list = [],
                                      **kwargs):
@@ -114,7 +119,7 @@ class Sentiment(object):
                     prewarned_list += [word]
                     continue
 
-        return sentiment_out
+        return sentiment_out / self.rescale_factor
 
     def eval_sentiment(self, sent_dict: dict, content: str, **kwargs):
         sentiment_out = 0
@@ -124,7 +129,7 @@ class Sentiment(object):
             except KeyError:
                 continue
 
-        return sentiment_out
+        return sentiment_out / self.rescale_factor
 
     def evaluate(self, df: pd.DataFrame, sent_dict: dict):
         df_len = len(df)
