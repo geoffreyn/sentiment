@@ -10,8 +10,6 @@ Regularization off:
 
 1.  python3 solution.py 0
 
-* NB: If you want to change the regularization state, the model directory must be deleted
-
 <hr>
 
 ## Sample handling of existing model
